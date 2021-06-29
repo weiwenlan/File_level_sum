@@ -5,6 +5,9 @@ import os
 from networkx.drawing.nx_pydot import write_dot
 import matplotlib.pyplot as plt
 import glob
+import sys
+sys.path.append('/home/vcp/haorend/function_sum_api/api/')
+from function_sum_api import code_sum
 sys.setrecursionlimit(10000) #例如这里设置为十万
 gar=['()','[]']
 gar_w=[',','\"','(',')','{','}','\'',':','+','=','-','.','argument_list','string','def','identifier','call']
@@ -117,6 +120,20 @@ def traverse(node, Graph, encoded_code,file_in):
         import_lists.append(match_from_span(node, encoded_code))
     if node.type in return_out:
         return
+
+
+    # if node.type == "function_definition":
+    #     f = open('result_dot/test1.txt','a')
+    #     f.write(match_from_span(node, encoded_code))
+    #     f.write('\n')
+    #     f.write('**************************************************************************\n')
+    #     f.close()
+
+    if node.type == "function_definition":
+        global function_list
+        function_list.append(match_from_span(node, encoded_code))
+
+
     if node.type == 'module':
         Graph.add_node("MODULE",type="\""+node.type+"\"", color="lightblue")
         Write_node(file_in,"MODULE",node.type)
@@ -246,17 +263,148 @@ def remove_duplicate(name):
     outfile.close()
     os.remove(name_in)
     
+def write_txt(filename,result):
+    f = open(filename,'w')
+    global function_list
+    for i in range(len(function_list)):
+        f.write(function_list[i])
+        f.write('\n\n\n\n')
+        f.write(result[i])
+        f.write('\n\n\n\n')
+    f.close()
+
+
+def run_model():
+    global function_list
+    code=function_list
+    print('running model')
+    load_model_path = 'brandnewtxt/code-to-text/pytorch_model.bin'
+    result = code_sum(code,load_model_path)
+    return result
+
+
+def generate_txt(file_path):
+    name =  file_path.split('/')[-1].split('.')[-2]
+    tmp_name = 'result_dot/'+name+'.txt'
+    f = open(tmp_name,'w')
+    f.truncate();
+    f.close
+    global function_list
+    function_list=[]
+    global import_lists
+    import_lists=[]
+    print('processing file with modal',name)
+    name=file_path.split('/')[-1].split('.')[0]
+    file_parse(file_path,name)
+    print('parsing')
+    remove_duplicate(name)
+    result = run_model()
+    write_txt(tmp_name,result)
+
+def generate_markdown(f,f_short,file_path):
+    name =  file_path.split('/')[-1].split('.')[-2]
+    title='# '+str(name)+ '.py'+ '\n'
+    f.write(title)
+    f_short.write(title)
+    tmp_path = 'path : ' + file_path + '\n'
+    f.write(tmp_path)
+    f_short.write(tmp_path)
+    global function_list
+    function_list=[]
+    global import_lists
+    import_lists=[]
+    print('processing file with modal',name)
+    name=file_path.split('/')[-1].split('.')[0]
+    file_parse(file_path,name)
+    print('parsing')
+    remove_duplicate(name)
+    result = run_model()
+    code_here='```python\n'
+    code_here_2='\n```\n'
+    for i in range(len(function_list)):
+        tmp_title ='## '+ function_list[i].split('\n')[0].split('(')[0][4:] + '\n'
+        f.write(tmp_title)
+        f.write('\n')
+        
+        tmp_result = '**' +result[i]+ '**'
+        f.write(tmp_result)
+        f.write('\n\n\n\n')
+        f.write(code_here)
+        f.write(function_list[i])
+        f.write(code_here_2)
+        f.write('\n\n\n\n')
+
+        title_short = function_list[i].split('\n')[0].split('(')[0][4:]+' : '+ tmp_result +'\n'
+        f_short.write(title_short)
+        f_short.write('\n\n\n\n')
+
+
+
+def judge_py(path):
+    if path.split('.')[-1] == 'py':
+        return True
+    else:
+        return False
 
 
 
 
 if __name__ == '__main__':
+#     #path = '/home/vcp/tianyih/repo/WebFramework/flask/tests/'
     
-    path = '/home/vcp/tianyih/repo/WebFramework/flask/tests/'
-    for filename in glob.glob('/home/vcp/tianyih/repo/WebFramework/flask/tests/*.py'):
-        global import_lists
-        import_lists=[]
-        print(filename)
-        name=filename.split('/')[-1].split('.')[0]
-        file_parse(filename,name)
-        remove_duplicate(name)
+    path='/home/vcp/wenlan/wenlan/file_level_sum/call_graph/YOLOv5master'
+    name=path.split('/')[-1]
+    sys_cmd='python pysa/ '+path+' --multi'
+    
+    os.system(sys_cmd)
+
+
+    markdown_name= 'markdown_files/'+name+'_Markdown.md'
+    markdown_short_name = 'markdown_files/'+name+'_Markdown_short.md'
+
+
+    f = open(markdown_name,"w")
+    f2 = open(markdown_short_name,'w')
+    # for line in open('path_result.txt'):
+    #     generate_txt(str(line[:-1]))
+
+    
+    filename = 'path_txt/' + name +'.txt'
+
+
+    for line in open(filename):
+        if judge_py(str(line[:-1])):
+            generate_markdown(f,f2,str(line[:-1]))
+
+    f.close()
+    f2.close()
+
+    # f= open('path_result.txt','w')
+    # f.truncate()
+    # f.close()
+
+
+    # for filename in glob.glob('/home/vcp/tianyih/repo/WebFramework/flask/tests/*.py'):
+    #     name =  filename.split('/')[-1].split('.')[-2]
+    #     tmp_name = 'result_dot/'+name+'.txt'
+    #     f = open(tmp_name,'w')
+    #     f.truncate();
+    #     f.close
+    #     global function_list
+    #     function_list=[]
+    #     global import_lists
+    #     import_lists=[]
+    #     print(filename)
+    #     name=filename.split('/')[-1].split('.')[0]
+    #     file_parse(filename,name)
+    #     remove_duplicate(name)
+    #     result = run_model()
+    #     write_txt(tmp_name,result)
+
+    # for filename in glob.glob('/home/vcp/tianyih/repo/WebFramework/flask/tests/*.py'):
+    #     global import_lists
+    #     import_lists=[]
+    #     print(filename)
+    #     name=filename.split('/')[-1].split('.')[0]
+    #     file_parse(filename,name)
+    #     remove_duplicate(name)
